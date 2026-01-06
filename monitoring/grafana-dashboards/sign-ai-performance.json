@@ -1,0 +1,392 @@
+{
+  "dashboard": {
+    "title": "手语AI平台 - 性能监控",
+    "uid": "sign-ai-performance",
+    "tags": ["sign-ai", "performance", "monitoring"],
+    "timezone": "browser",
+    "refresh": "15s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "API - 响应时间分布",
+        "type": "heatmap",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path)",
+            "format": "heatmap",
+            "legendFormat": "{{le}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "API - 错误率",
+        "type": "piechart",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "sum by(status) (rate(http_requests_total[5m]))",
+            "legendFormat": "{{status}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "API - 请求数统计",
+        "type": "stat",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[1h]))",
+            "legendFormat": "1小时总请求数"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "API - 平均响应时间",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m])",
+            "legendFormat": "{{path}}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "API - P99 响应时间",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{path}}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Websocket - 连接数",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 16
+        },
+        "targets": [
+          {
+            "expr": "websocket_connections_total",
+            "legendFormat": "总连接数"
+          },
+          {
+            "expr": "websocket_connections_active",
+            "legendFormat": "活跃连接"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Websocket - 消息速率",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 16
+        },
+        "targets": [
+          {
+            "expr": "rate(ws_messages_received_total[5m])",
+            "legendFormat": "接收消息/秒"
+          },
+          {
+            "expr": "rate(ws_messages_sent_total[5m])",
+            "legendFormat": "发送消息/秒"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "数据库 - 慢查询速率",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 16
+        },
+        "targets": [
+          {
+            "expr": "rate(pg_stat_statements_calls_total[5m])",
+            "legendFormat": "{{datname}}"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "数据库 - 查询类型分布",
+        "type": "piechart",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 16
+        },
+        "targets": [
+          {
+            "expr": "sum by (query) (rate(pg_stat_statements_calls[5m]))",
+            "legendFormat": "{{query}}"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Celery - 任务执行时间",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(celery_task_runtime_seconds_bucket[5m]))",
+            "legendFormat": "{{task_name}}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Celery - 任务失败率",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        },
+        "targets": [
+          {
+            "expr": "rate(celery_task_failed_total[5m])",
+            "legendFormat": "{{task_name}}"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "AI 模型 - 推理时间 (STGCN)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(stgcn_inference_duration_seconds_bucket[5m]))",
+            "legendFormat": "STGCN P95"
+          },
+          {
+            "expr": "rate(stgcn_inference_duration_seconds_sum[5m]) / rate(stgcn_inference_duration_seconds_count[5m])",
+            "legendFormat": "STGCN 平均"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "AI 模型 - 推理时间 (Whisper)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(whisper_inference_duration_seconds_bucket[5m]))",
+            "legendFormat": "Whisper P95"
+          },
+          {
+            "expr": "rate(whisper_inference_duration_seconds_sum[5m]) / rate(whisper_inference_duration_seconds_count[5m])",
+            "legendFormat": "Whisper 平均"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s"
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "AI 模型 - 推理吞吐量",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        },
+        "targets": [
+          {
+            "expr": "rate(stgcn_inference_total[5m])",
+            "legendFormat": "STGCN 推理/秒"
+          },
+          {
+            "expr": "rate(whisper_inference_total[5m])",
+            "legendFormat": "Whisper 推理/秒"
+          },
+          {
+            "expr": "rate(tts_inference_total[5m])",
+            "legendFormat": "TTS 推理/秒"
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "title": "TTS - 语音合成时间",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 40
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(tts_inference_duration_seconds_bucket[5m]))",
+            "legendFormat": "TTS P95"
+          },
+          {
+            "expr": "rate(tts_inference_duration_seconds_sum[5m]) / rate(tts_inference_duration_seconds_count[5m])",
+            "legendFormat": "TTS 平均"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s"
+          }
+        ]
+      },
+      {
+        "id": 16,
+        "title": "文件上传 - 上传速率",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 48
+        },
+        "targets": [
+          {
+            "expr": "rate(file_uploads_total[5m])",
+            "legendFormat": "上传/秒"
+          },
+          {
+            "expr": "rate(file_uploads_bytes[5m])",
+            "legendFormat": "上传字节/秒"
+          }
+        ]
+      },
+      {
+        "id": 17,
+        "title": "文件上传 - 上传大小分布",
+        "type": "heatmap",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 48
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(file_upload_size_bucket[5m])) by (le)",
+            "format": "heatmap"
+          }
+        ]
+      },
+      {
+        "id": 18,
+        "title": "缓存命中率",
+        "type": "gauge",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 48
+        },
+        "targets": [
+          {
+            "expr": "(rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m]))) * 100",
+            "legendFormat": "命中率 %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

@@ -1,0 +1,285 @@
+{
+  "dashboard": {
+    "title": "手语AI平台 - 系统概览",
+    "uid": "sign-ai-overview",
+    "tags": ["sign-ai", "overview", "monitoring"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "系统状态概览",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "up",
+            "legendFormat": "{{job}} - {{instance}}"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none"
+        }
+      },
+      {
+        "id": 2,
+        "title": "CPU 使用率",
+        "type": "gauge",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 4
+        },
+        "targets": [
+          {
+            "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "内存使用率",
+        "type": "gauge",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 4
+        },
+        "targets": [
+          {
+            "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "磁盘使用率",
+        "type": "gauge",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 4
+        },
+        "targets": [
+          {
+            "expr": "(1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "API 请求速率",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 12
+        },
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "{{method}} {{path}}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "reqps"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "API 响应时间 (P95)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 12
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{path}}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "数据库连接数",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 20
+        },
+        "targets": [
+          {
+            "expr": "pg_stat_activity_count",
+            "legendFormat": "活跃连接"
+          },
+          {
+            "expr": "pg_settings_max_connections",
+            "legendFormat": "最大连接"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "数据库查询时间",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 20
+        },
+        "targets": [
+          {
+            "expr": "rate(pg_stat_statements_total_time[5m])",
+            "legendFormat": "查询时间"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Celery 任务队列",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 28
+        },
+        "targets": [
+          {
+            "expr": "celery_tasks_total",
+            "legendFormat": "总任务数"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Celery 活跃 Worker",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 28
+        },
+        "targets": [
+          {
+            "expr": "celery_workers_active",
+            "legendFormat": "活跃 Worker"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Redis 命令速率",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 28
+        },
+        "targets": [
+          {
+            "expr": "rate(redis_commands_processed_total[5m])",
+            "legendFormat": "命令/秒"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Nginx 请求速率",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 36
+        },
+        "targets": [
+          {
+            "expr": "rate(nginx_http_requests_total[5m])",
+            "legendFormat": "请求/秒"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Nginx 连接数",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 36
+        },
+        "targets": [
+          {
+            "expr": "nginx_connections_active",
+            "legendFormat": "活跃连接"
+          },
+          {
+            "expr": "nginx_connections_waiting",
+            "legendFormat": "等待连接"
+          }
+        ]
+      }
+    ]
+  },
+  "overwrite": true
+}

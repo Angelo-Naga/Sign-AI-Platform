@@ -1,0 +1,285 @@
+# ============================================
+# 手语AI平台 Prometheus 配置文件
+# ============================================
+# 功能：
+# - 目标服务监控
+# - 数据采集规则
+# - 告警规则
+# - 存储策略
+# ============================================
+
+# 全局配置
+global:
+  # 采集间隔
+  scrape_interval: 15s
+  # 评估间隔
+  evaluation_interval: 15s
+  # 外部标签
+  external_labels:
+    cluster: 'sign-ai-platform'
+    environment: 'production'
+
+# 告警管理器配置
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+          # 告警标签重新标记
+          # - source_labels: [__address__]
+          #   regex: '(.*):9093'
+          #   target_label: instance
+          #   replacement: '$1'
+
+# 告警规则文件
+rule_files:
+  - "/etc/prometheus/alerts/*.yml"
+  - "/etc/prometheus/alerts/*.yaml"
+
+# 采集配置
+scrape_configs:
+  # ============================================
+  # Prometheus 自监控
+  # ============================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          instance: 'monitoring'
+
+  # ============================================
+  # 后端服务监控（FastAPI）
+  # ============================================
+  - job_name: 'backend-api'
+    scrape_interval: 10s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['backend:8000']
+        labels:
+          service: 'backend'
+          instance: 'signai-backend'
+          environment: 'production'
+    # 采集数据的重标记
+    relabel_configs:
+      # 标签重命名
+      - source_labels: [__address__]
+        target_label: instance
+      # 添加自定义标签
+      - target_label: app
+        replacement: 'sign-ai-platform'
+
+  # ============================================
+  # Nginx 前端监控
+  # ============================================
+  - job_name: 'frontend-nginx'
+    scrape_interval: 10s
+    metrics_path: '/nginx_status'
+    static_configs:
+      - targets: ['frontend:8080']
+        labels:
+          service: 'frontend'
+          instance: 'signai-frontend'
+          type: 'nginx'
+
+  # ============================================
+  # PostgreSQL 数据库监控
+  # ============================================
+  - job_name: 'postgres'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'database'
+          instance: 'signai-postgres'
+          database: 'signai'
+    # 需要部署 postgres-exporter
+    # docker-compose 需要添加 postgres-exporter 服务
+
+  # ============================================
+  # Redis 缓存监控
+  # ============================================
+  - job_name: 'redis'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'cache'
+          instance: 'signai-redis'
+          type: 'redis'
+    # 需要部署 redis-exporter
+    # docker-compose 需要添加 redis-exporter 服务
+
+  # ============================================
+  # Celery Worker 监控 (通过 Flower)
+  # ============================================
+  - job_name: 'celery-worker'
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['flower:5555']
+        labels:
+          service: 'celery'
+          instance: 'signai-celery-worker'
+          type: 'worker'
+
+  # ============================================
+  # Celery Beat 监控
+  # ============================================
+  - job_name: 'celery-beat'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['celery-beat:8000']
+        labels:
+          service: 'celery'
+          instance: 'signai-celery-beat'
+          type: 'scheduler'
+
+  # ============================================
+  # Nginx 监控（需要 nginx-prometheus-exporter）
+  # ============================================
+  - job_name: 'nginx-exporter'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+        labels:
+          service: 'nginx'
+          instance: 'signai-nginx'
+          type: 'web-server'
+
+  # ============================================
+  # Docker 容器监控 (cAdvisor)
+  # ============================================
+  - job_name: 'cadvisor'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          service: 'docker'
+          instance: 'signai-docker'
+          type: 'containers'
+    # 监控容器资源使用情况
+
+  # ============================================
+  # Node Exporter (主机监控)
+  # ============================================
+  - job_name: 'node-exporter'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'host'
+          instance: 'signai-host'
+          type: 'system'
+    # 监控主机资源使用情况
+
+  # ============================================
+  # 系统服务发现（kubernetes 环境）
+  # ============================================
+  # - job_name: 'kubernetes-pods'
+  #   kubernetes_sd_configs:
+  #     - role: pod
+  #   relabel_configs:
+  #     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+  #       action: keep
+  #       regex: true
+  #     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+  #       action: replace
+  #       target_label: __metrics_path__
+  #       regex: (.+)
+  #     - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+  #       action: replace
+  #       regex: ([^:]+)(?::\d+)?;(\d+)
+  #       replacement: $1:$2
+  #       target_label: __address__
+  #     - action: labelmap
+  #       regex: __meta_kubernetes_pod_label_(.+)
+  #     - source_labels: [__meta_kubernetes_namespace]
+  #       action: replace
+  #       target_label: kubernetes_namespace
+  #     - source_labels: [__meta_kubernetes_pod_name]
+  #       action: replace
+  #       target_label: kubernetes_pod_name
+
+# ============================================
+# 存储策略（长期数据保留）
+# ============================================
+# 通过命令行参数或文件配置
+# storage.tsdb.retention.time=15d
+
+# ============================================
+# 追踪配置（用于监控性能）
+# ============================================
+# tracing:
+#   endpoint: "tempo:4318"
+#   client_type: "http"
+
+# ============================================
+# 告警规则示例（需要创建单独的告警规则文件）
+# ============================================
+# alerts:
+#   - name: system_alerts
+#     rules:
+#       - alert: HighCPUUsage
+#         expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "High CPU usage on {{ $labels.instance }}"
+#           description: "CPU usage is above 80% for more than 5 minutes."
+
+#       - alert: HighMemoryUsage
+#         expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "High memory usage on {{ $labels.instance }}"
+#           description: "Memory usage is above 85% for more than 5 minutes."
+
+#       - alert: ServiceDown
+#         expr: up{job="backend-api"} == 0
+#         for: 1m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "Backend service is down"
+#           description: "Backend API service has been down for more than 1 minute."
+
+#       - alert: HighErrorRate
+#         expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+#         for: 5m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "High error rate detected"
+#           description: "Error rate is above 5% for more than 5 minutes."
+
+#       - alert: DatabaseConnectionPoolExhausted
+#         expr: pg_stat_activity_count / pg_settings_max_connections * 100 > 90
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "Database connection pool exhausted"
+#           description: "Database connection pool usage is above 90%."
+
+#       - alert: SlowAPICalls
+#         expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5
+#         for: 10m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "Slow API calls detected"
+#           description: "95th percentile of API response time is above 5 seconds."
+
+#       - alert: DiskSpaceLow
+#         expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 20
+#         for: 10m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "Disk space low"
+#           description: "Disk usage on {{ $labels.instance }} is above 80%."
