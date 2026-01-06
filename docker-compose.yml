@@ -1,0 +1,323 @@
+version: '3.8'
+
+# ============================================
+# 手语AI平台 Docker Compose 配置
+# ============================================
+# 该配置文件定义了完整的手语AI平台部署架构
+# 包含前端、后端、数据库、缓存、任务队列和监控
+
+services:
+  # ============================================
+  # 前端服务（Nginx）
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sign-ai-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/ssl:/etc/nginx/ssl:ro
+    networks:
+      - app-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - NODE_ENV=production
+
+  # ============================================
+  # 后端服务（FastAPI）
+  # ============================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sign-ai-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+      - ./models:/app/models:ro
+      - ./backend/logs:/app/logs
+      - backend-cache:/tmp/cache
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-signai}:${POSTGRES_PASSWORD:-signai_password}@postgres:5432/${POSTGRES_DB:-signai}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-jwt-secret-key-change-in-production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS:-24}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - MODEL_PATH=${MODEL_PATH:-/app/models}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TZ=${TZ:-Asia/Shanghai}
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-10485760}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      - CORS_CREDENTIALS=${CORS_CREDENTIALS:-true}
+      - WORKERS=${WORKERS:-4}
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${WORKERS:-4}
+
+  # ============================================
+  # PostgreSQL 数据库
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: sign-ai-postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-signai} -d ${POSTGRES_DB:-signai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-signai}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-signai_password}
+      - POSTGRES_DB=${POSTGRES_DB:-signai}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - TZ=${TZ:-Asia/Shanghai}
+
+  # ============================================
+  # Redis 缓存
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: sign-ai-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+      - ./scripts/redis.conf:/etc/redis/redis.conf:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server /etc/redis/redis.conf
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+
+  # ============================================
+  # Celery Worker（异步任务处理）
+  # ============================================
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sign-ai-celery-worker
+    volumes:
+      - ./backend:/app
+      - ./models:/app/models:ro
+      - ./backend/logs:/app/logs
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-signai}:${POSTGRES_PASSWORD:-signai_password}@postgres:5432/${POSTGRES_DB:-signai}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - MODEL_PATH=${MODEL_PATH:-/app/models}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TZ=${TZ:-Asia/Shanghai}
+      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY:-4}
+      - CELERY_TASK_MAX_RETRIES=${CELERY_TASK_MAX_RETRIES:-3}
+    command: celery -A api.celery_app worker --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY:-4} --max-tasks-per-child=1000
+
+  # ============================================
+  # Celery Beat（定时任务调度器）
+  # ============================================
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sign-ai-celery-beat
+    volumes:
+      - ./backend:/app
+      - ./backend/logs:/app/logs
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-signai}:${POSTGRES_PASSWORD:-signai_password}@postgres:5432/${POSTGRES_DB:-signai}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TZ=${TZ:-Asia/Shanghai}
+    command: celery -A api.celery_app beat --loglevel=info
+
+  # ============================================
+  # Flower（Celery 任务监控面板）
+  # ============================================
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sign-ai-flower
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    networks:
+      - app-network
+    depends_on:
+      - redis
+    restart: unless-stopped
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - FLOWER_PORT=${FLOWER_PORT:-5555}
+      - FLOWER_BASIC_AUTH=${FLOWER_USERNAME:-admin}:${FLOWER_PASSWORD:-flower_password}
+      - TZ=${TZ:-Asia/Shanghai}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: celery -A api.celery_app flower --port=${FLOWER_PORT:-5555} --broker=redis://redis:6379/0
+
+  # ============================================
+  # Prometheus（监控指标收集）
+  # ============================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: sign-ai-prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - app-network
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+
+  # ============================================
+  # Grafana（可视化监控仪表板）
+  # ============================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: sign-ai-grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USERNAME:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-grafana_password}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:${GRAFANA_PORT:-3001}
+      - TZ=${TZ:-Asia/Shanghai}
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  # ============================================
+  # Alertmanager（告警管理）
+  # ============================================
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: sign-ai-alertmanager
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    networks:
+      - app-network
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+
+# ============================================
+# 网络配置
+# ============================================
+networks:
+  app-network:
+    driver: bridge
+    name: sign-ai-network
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ============================================
+# 数据卷配置
+# ============================================
+volumes:
+  # PostgreSQL 数据持久化
+  postgres-data:
+    name: sign-ai-postgres-data
+  
+  # Redis 数据持久化
+  redis-data:
+    name: sign-ai-redis-data
+  
+  # Prometheus 监控数据
+  prometheus-data:
+    name: sign-ai-prometheus-data
+  
+  # Grafana 仪表板数据
+  grafana-data:
+    name: sign-ai-grafana-data
+  
+  # Alertmanager 告警数据
+  alertmanager-data:
+    name: sign-ai-alertmanager-data
+  
+  # 后端缓存卷
+  backend-cache:
+    name: sign-ai-backend-cache
