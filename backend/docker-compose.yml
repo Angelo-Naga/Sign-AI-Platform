@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # FastAPI 后端服务
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sign-ai-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://signai:signai123@db:5432/signai
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=your-secret-key-change-in-production
+      - ENVIRONMENT=development
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - sign-ai-network
+
+  # PostgreSQL 数据库
+  db:
+    image: postgres:15-alpine
+    container_name: sign-ai-db
+    environment:
+      - POSTGRES_USER=signai
+      - POSTGRES_PASSWORD=signai123
+      - POSTGRES_DB=signai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - sign-ai-network
+
+  # Redis 缓存和消息队列
+  redis:
+    image: redis:7-alpine
+    container_name: sign-ai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - sign-ai-network
+
+  # Celery Worker - 处理异步任务
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sign-ai-celery-worker
+    command: celery -A app.tasks.celery_worker worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://signai:signai123@db:5432/signai
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=your-secret-key-change-in-production
+    volumes:
+      - ./app:/app/app
+      - ./uploads:/app/uploads
+    depends_on:
+      - redis
+      - db
+    restart: unless-stopped
+    networks:
+      - sign-ai-network
+
+  # Celery Beat - 定时任务调度
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sign-ai-celery-beat
+    command: celery -A app.tasks.celery_worker beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://signai:signai123@db:5432/signai
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=your-secret-key-change-in-production
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      - redis
+      - db
+    restart: unless-stopped
+    networks:
+      - sign-ai-network
+
+  # Flower - Celery 监控工具
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sign-ai-flower
+    command: celery -A app.tasks.celery_worker flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - sign-ai-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  sign-ai-network:
+    driver: bridge

@@ -1,0 +1,33 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+websockets==12.0
+opencv-python==4.8.1.78
+mediapipe==0.10.8
+torch==2.1.1
+openai-whisper==20231117
+transformers==4.35.2
+numpy==1.24.3
+pillow==10.1.0
+pydantic==2.5.0
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+sqlalchemy==2.0.23
+redis==5.0.1
+celery==5.3.4
+onnxruntime==1.16.3
+pywaveform==0.0.2
+soundfile==0.12.1
+librosa==0.10.1
+aiofiles==23.2.1
+python-dotenv==1.0.0
+pydantic-settings==2.1.0
+# 手语识别模块依赖
+requests==2.31.0
+huggingface-hub==0.19.4
+
+# 语音处理模块依赖
+edge-tts==6.1.9
+noisereduce==2.0.1
+pydub==0.25.1
+webrtcvad==2.0.10
